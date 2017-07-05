@@ -1,16 +1,9 @@
 {
-    "name": "khepin/yaml-fixtures-bundle",
+    "name": "get-repo/yaml-fixtures-bundle",
     "type": "symfony-bundle",
     "description": "Symfony bundle for easy loading of YAML based fixtures.",
     "keywords": ["data fixtures doctrine yaml"],
-    "homepage": "https://github.com/khepin/KhepinYamlFixturesBundle",
     "license": "MIT",
-    "authors": [
-        {
-            "name":  "Sébastien Armand",
-            "email": "khepin@gmail.com"
-        }
-    ],
     "require": {
         "doctrine/data-fixtures": "1.*",
         "doctrine/doctrine-fixtures-bundle": "2.*",
