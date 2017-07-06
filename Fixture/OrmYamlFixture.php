@@ -39,7 +39,13 @@ class OrmYamlFixture extends AbstractFixture
         foreach ($data as $field => $value) {
             // Add the fields defined in the fistures file
             $method = Inflector::camelize('set_' . $field);
-            //
+            $methods = [
+                Inflector::camelize('set_' . Inflector::singularize($field)),
+                Inflector::camelize('set_' . Inflector::pluralize($field)),
+                Inflector::camelize('add_' . Inflector::singularize($field)),
+                Inflector::camelize('add_' . Inflector::pluralize($field)),
+            ];
+
             if (in_array($field, $mapping)) {
                 // Dates need to be converted to DateTime objects
                 $type = $metadata->fieldMappings[$field]['type'];
@@ -49,11 +55,23 @@ class OrmYamlFixture extends AbstractFixture
                 $object->$method($value);
             } elseif (in_array($field, $associations)) { // This field is an association
                 if (is_array($value)) { // The field is an array of associations
-                    $referenceArray = array();
                     foreach ($value as $referenceObject) {
-                        $referenceArray[] = $this->loader->getReference($referenceObject);
+                        $objectValue = $this->loader->getReference($referenceObject);
+                        $found = false;
+                        foreach ($methods as $methodGuess) {
+                            if (method_exists($object, $methodGuess)) {
+                                $object->$methodGuess($objectValue);
+                                $found = true;
+                                break;
+                            }
+                        }
+                        if (!$found) {
+                            $methods = implode(', ', $methods);
+                            throw new \BadMethodCallException(
+                                "Attempted to call undefined methods named '{$methods}' of class " . get_class($object)
+                            );
+                        }
                     }
-                    $object->$method($referenceArray);
                 } else {
                     $object->$method($this->loader->getReference($value));
                 }

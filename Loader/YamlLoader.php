@@ -2,8 +2,6 @@
 
 namespace Khepin\YamlFixturesBundle\Loader;
 
-use Khepin\YamlFixturesBundle\Fixture\YamlAclFixture;
-use Doctrine\Common\Persistence\ObjectManager;
 use Doctrine\Common\DataFixtures\Purger\ORMPurger;
 use Symfony\Component\Yaml\Yaml;
 use Symfony\Component\HttpKernel\KernelInterface;
@@ -103,24 +101,47 @@ class YamlLoader
     public function loadFixtures()
     {
         $this->loadFixtureFiles();
-        foreach ($this->fixture_files as $file) {
-            $fixture_data = Yaml::parse(file_get_contents($file));
-            // if nothing is specified, we use doctrine orm for persistence
-            $persistence = isset($fixture_data['persistence']) ? $fixture_data['persistence'] : 'orm';
+        $symfonYamlFixtures = [];
+        $container = $this->kernel->getContainer();
+        $parser = $container->get('symfonyaml_utils.yaml');
 
-            $persister = $this->getPersister($persistence);
-            $manager = $persister->getManagerForClass($fixture_data['model']);
-
-            $fixture = $this->getFixtureClass($persistence);
-            $fixture = new $fixture($fixture_data, $this, $file);
-            $fixture->load($manager, func_get_args());
-        }
-
-        if (!is_null($this->acl_manager)) {
-            foreach ($this->fixture_files as $file) {
-                $fixture = new YamlAclFixture($file, $this);
-                $fixture->load($this->acl_manager, func_get_args());
+        foreach ($this->fixture_files as $i => $file) {
+            $c = $parser->parse($file);
+            $model = key($c);
+            if (strpos($model, 'SymfonYaml\CoreBundle\Entity\\') === 0) {
+                $parts = explode('\\', $model);
+                $className = array_pop($parts);
+                $model = $container->getParameter('symfonyaml_core.primary_bundle.namespace') . "\Entity\\{$className}";
             }
+            $c = current($c);
+
+            if (isset($c['data']) && is_array($c['data']) && $c['data']) {
+                $order = isset($c['data']['order']) ? (int) $c['data']['order'] : null;
+                $fixtureData = $c['data'];
+                $fixtureData['model'] = $model;
+
+                // if nothing is specified, we use doctrine orm for persistence
+                $persistence = isset($fixtureData['persistence']) ? $fixtureData['persistence'] : 'orm';
+
+                $persister = $this->getPersister($persistence);
+                $manager = $persister->getManagerForClass($fixtureData['model']);
+
+                $fixture = $this->getFixtureClass($persistence);
+                $fixture = new $fixture($fixtureData, $this, $file);
+
+                // ordering by integers
+                $key = isset($symfonYamlFixtures[$order]) ? ("{$order}.{$i}") : $order;
+                if (is_null($order)) {
+                    $key = time() . $i;
+                }
+
+                $symfonYamlFixtures[$key] = $fixture;
+            }
+        }
+        ksort($symfonYamlFixtures, SORT_NUMERIC);
+
+        foreach ($symfonYamlFixtures as $fixture) {
+            $fixture->load($manager, func_get_args());
         }
     }
 
@@ -129,6 +150,15 @@ class YamlLoader
      */
     public function purgeDatabase($persistence, $databaseName = null, $withTruncate = false)
     {
+        $setForeignKeyChecks = function ($flag) use ($persistence, $databaseName) {
+            $this->getPersister($persistence)
+            ->getManager($databaseName)
+            ->getConnection()
+            ->exec('SET FOREIGN_KEY_CHECKS=' . $flag);
+        };
+
+        $setForeignKeyChecks(0);
+
         $purgetools = array(
             'orm'       => array(
                 'purger'    => 'Doctrine\Common\DataFixtures\Purger\ORMPurger',
@@ -158,6 +188,8 @@ class YamlLoader
             // purge
             $executor->purge();
         }
+
+        $setForeignKeyChecks(1);
     }
 
     /*
