@@ -3,8 +3,8 @@
 namespace Khepin\YamlFixturesBundle\Loader;
 
 use Doctrine\Common\DataFixtures\Purger\ORMPurger;
-use Symfony\Component\Yaml\Yaml;
 use Symfony\Component\HttpKernel\KernelInterface;
+use SymfonYaml\UtilsBundle\Yaml\Yaml;
 
 class YamlLoader
 {
@@ -103,7 +103,7 @@ class YamlLoader
         $this->loadFixtureFiles();
         $symfonYamlFixtures = [];
         $container = $this->kernel->getContainer();
-        $parser = $container->get('symfonyaml_utils.yaml');
+        $parser = new Yaml($container);
 
         foreach ($this->fixture_files as $i => $file) {
             $c = $parser->parse($file);
